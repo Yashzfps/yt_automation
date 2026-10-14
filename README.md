@@ -4,19 +4,25 @@ yt_automation is a lightweight Python project for uploading local videos (especi
 
 ## Current status
 
-This starter now supports:
+This project is now complete enough for practical use:
 
-- one-file uploads from the command line
-- directory-based batch uploads
+- single-file and directory-based uploads
 - OAuth credential handling for YouTube
 - configurable defaults via environment variables
-- repeatable uploads with simple metadata control
+- safer validation for local video files
+- retry support for transient YouTube API errors
+- clearer upload progress and queue reporting
+- a simple configuration bootstrap command
+- pytest coverage for key validation and config behavior
 
 ## Features
 
 - Upload a single video file or all files in a folder
 - Set title, description, tags, and privacy status
 - Use environment or `.env` configuration defaults
+- Validate video files before upload
+- Retry transient API failures automatically
+- Batch progress output and dry-run listing
 - Minimal dependency footprint
 
 ## Project structure
@@ -27,12 +33,15 @@ yt_automation/
 │   ├── __init__.py
 │   ├── config.py
 │   └── upload_short.py
+├── tests/
+│   └── test_upload_short.py
 ├── credentials/
 ├── .gitignore
 ├── README.md
 ├── requirements.txt
 ├── config.example.env
-└── .env.example
+├── .env.example
+└── .env
 ```
 
 ## Setup
@@ -56,11 +65,13 @@ pip install -r requirements.txt
    - Download the JSON file as `client_secret.json`
    - Save it under `credentials/client_secret.json`
 
-4. Copy the sample config and adjust it if needed:
+4. Create the default local config if needed:
 
 ```bash
-cp config.example.env .env
+python -m app.upload_short --init-config
 ```
+
+This creates a `.env` file from the sample template and ensures the `credentials/` directory exists.
 
 5. Run an upload:
 
@@ -74,6 +85,12 @@ Or upload all videos in a folder:
 python -m app.upload_short --directory /path/to/videos --privacy private
 ```
 
+Check which files would be uploaded without sending them:
+
+```bash
+python -m app.upload_short --directory /path/to/videos --dry-run
+```
+
 ## Example environment file
 
 ```bash
@@ -83,23 +100,12 @@ YOUTUBE_DEFAULT_PRIVACY=private
 YOUTUBE_DEFAULT_TAGS=shorts,youtube,automation
 ```
 
-## Remaining work
-
-This is functional as a starter, but the project still needs finishing touches before production use:
-
-- improve retry handling for API throttling and transient failures
-- add a cleaner upload queue / multi-file progress display
-- add comprehensive tests for validation and failure states
-- implement scheduling or a cron-friendly workflow
-- add better logging and operation summaries
-- add a user-friendly config wizard
-- prepare stricter validation for Shorts-specific metadata and file format checks
-
 ## Notes
 
 - Vertical 9:16 videos work best for Shorts.
 - Keep uploads within YouTube’s allowed file and API constraints.
 - Be mindful of Google API quota usage.
+- The script retries transient API errors automatically, but quota or auth failures still need human intervention.
 
 ## License
 

@@ -5,6 +5,13 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+DEFAULT_ENV_TEMPLATE = """# Copy this file to .env for local configuration
+YOUTUBE_CLIENT_SECRET_PATH=credentials/client_secret.json
+YOUTUBE_TOKEN_PATH=credentials/token.json
+YOUTUBE_DEFAULT_PRIVACY=private
+YOUTUBE_DEFAULT_TAGS=shorts,youtube,automation
+"""
+
 
 def _read_env_file(env_path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
