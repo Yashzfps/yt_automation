@@ -1,61 +1,105 @@
 # yt_automation
 
-A small Python utility to upload YouTube Shorts automatically from local video files.
-
-## What this project does
-
-- reads a local video file
-- authenticates with the YouTube Data API
-- uploads the file as a YouTube video
-- supports basic metadata such as title, description, tags, and privacy status
-- is designed to be extended for batch uploads and scheduled jobs
+yt_automation is a lightweight Python project for uploading local videos (especially Shorts) to YouTube using the YouTube Data API.
 
 ## Current status
 
-This repo is intentionally scaffolded as a working starter, not a full production-ready uploader. The main pieces are in place, but some production work still remains.
+This starter now supports:
 
-## Quick start
+- one-file uploads from the command line
+- directory-based batch uploads
+- OAuth credential handling for YouTube
+- configurable defaults via environment variables
+- repeatable uploads with simple metadata control
 
-1. Create a Google Cloud project and enable the YouTube Data API.
-2. Create OAuth client credentials and download `client_secret.json`.
-3. Install dependencies:
+## Features
+
+- Upload a single video file or all files in a folder
+- Set title, description, tags, and privacy status
+- Use environment or `.env` configuration defaults
+- Minimal dependency footprint
+
+## Project structure
+
+```text
+yt_automation/
+├── app/
+│   ├── __init__.py
+│   ├── config.py
+│   └── upload_short.py
+├── credentials/
+├── .gitignore
+├── README.md
+├── requirements.txt
+├── config.example.env
+└── .env.example
+```
+
+## Setup
+
+1. Create and activate a virtual environment:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
+```
+
+2. Install dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
 
-4. Put your OAuth file in a folder like `credentials/client_secret.json`.
-5. Run the uploader:
+3. Create Google Cloud OAuth credentials:
+   - Enable the YouTube Data API
+   - Create OAuth client ID credentials
+   - Download the JSON file as `client_secret.json`
+   - Save it under `credentials/client_secret.json`
+
+4. Copy the sample config and adjust it if needed:
 
 ```bash
-python app/upload_short.py \
-  --video /path/to/short.mp4 \
-  --title "My Short" \
-  --description "Uploaded with yt_automation" \
-  --tags "shorts,youtube,automation" \
-  --privacy private
+cp config.example.env .env
 ```
 
-## Notes for Shorts
+5. Run an upload:
 
-- Prefer a vertical 9:16 video.
-- Keep videos short, ideally under 60 seconds.
-- YouTube Shorts often work best with vertical framing and simple metadata.
+```bash
+python -m app.upload_short --video /path/to/video.mp4 --title "My Short" --description "Uploaded using yt_automation" --tags "shorts,youtube,automation" --privacy private
+```
+
+Or upload all videos in a folder:
+
+```bash
+python -m app.upload_short --directory /path/to/videos --privacy private
+```
+
+## Example environment file
+
+```bash
+YOUTUBE_CLIENT_SECRET_PATH=credentials/client_secret.json
+YOUTUBE_TOKEN_PATH=credentials/token.json
+YOUTUBE_DEFAULT_PRIVACY=private
+YOUTUBE_DEFAULT_TAGS=shorts,youtube,automation
+```
 
 ## Remaining work
 
-Before this becomes fully complete for real-world use, the following still needs to be done:
+This is functional as a starter, but the project still needs finishing touches before production use:
 
-- add automated tests
-- add better logging and retries
-- handle OAuth refresh and credentials persistence cleanly
-- support batch uploads from a folder
-- add scheduling or cron support
-- add config file support for defaults
-- add a more robust CLI and error reporting
-- validate upload behavior against YouTube API quotas and limits
+- improve retry handling for API throttling and transient failures
+- add a cleaner upload queue / multi-file progress display
+- add comprehensive tests for validation and failure states
+- implement scheduling or a cron-friendly workflow
+- add better logging and operation summaries
+- add a user-friendly config wizard
+- prepare stricter validation for Shorts-specific metadata and file format checks
+
+## Notes
+
+- Vertical 9:16 videos work best for Shorts.
+- Keep uploads within YouTube’s allowed file and API constraints.
+- Be mindful of Google API quota usage.
 
 ## License
 

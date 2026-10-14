@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import os
 import sys
@@ -10,12 +12,28 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
-# Scope needed to upload videos to YouTube.
+from app.config import get_client_secret_path, get_default_privacy, get_default_tags, get_token_path
+
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
 
-def get_credentials(token_path: str, client_secret_path: str) -> Credentials:
-    """Reads an existing token or opens OAuth flow to generate one."""
+def ensure_parent_dir(path: str) -> None:
+    parent = Path(path).parent
+    if parent and not parent.exists():
+        parent.mkdir(parents=True, exist_ok=True)
+
+
+def get_credentials() -> Credentials:
+    client_secret_path = get_client_secret_path()
+    token_path = get_token_path()
+
+    if not os.path.exists(client_secret_path):
+        raise FileNotFoundError(
+            f"Missing OAuth client_secret.json at {client_secret_path}. "
+            "Create it from Google Cloud and try again."
+        )
+
+    ensure_parent_dir(token_path)
     creds = None
 
     if os.path.exists(token_path):
@@ -46,24 +64,12 @@ def build_upload_body(title: str, description: str, tags: list[str], privacy: st
     }
 
 
-def upload_short(video_path: str, title: str, description: str, tags: list[str], privacy: str):
-    video_file = Path(video_path)
-    if not video_file.exists():
+def upload_video(video_path: str, title: str, description: str, tags: list[str], privacy: str) -> dict:
+    if not os.path.exists(video_path):
         raise FileNotFoundError(f"Video file not found: {video_path}")
 
-    token_path = os.environ.get("YOUTUBE_TOKEN_PATH", "credentials/token.json")
-    client_secret_path = os.environ.get("YOUTUBE_CLIENT_SECRET_PATH", "credentials/client_secret.json")
-
-    if not os.path.exists(client_secret_path):
-        raise FileNotFoundError(
-            "Missing OAuth client_secret.json. Create credentials/client_secret.json from Google Cloud."
-        )
-
-    os.makedirs(os.path.dirname(token_path) or ".", exist_ok=True)
-    creds = get_credentials(token_path, client_secret_path)
-
+    creds = get_credentials()
     youtube = build("youtube", "v3", credentials=creds)
-
     body = build_upload_body(title, description, tags, privacy)
     media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
 
@@ -79,32 +85,66 @@ def upload_short(video_path: str, title: str, description: str, tags: list[str],
         if status:
             print(f"Upload progress: {status.resumable_progress} bytes uploaded")
 
-    print("Upload complete")
-    print(f"Video ID: {response['id']}")
     return response
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Upload a local video to YouTube as a short.")
-    parser.add_argument("--video", required=True, help="Path to the local video file.")
-    parser.add_argument("--title", required=True, help="YouTube video title.")
+def list_video_files(source: str, recursive: bool = False) -> list[str]:
+    path = Path(source)
+    if not path.exists():
+        raise FileNotFoundError(f"Path does not exist: {source}")
+
+    if path.is_file():
+        return [str(path)]
+
+    suffixes = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+    if recursive:
+        files = [p for p in path.rglob("*") if p.is_file() and p.suffix.lower() in suffixes]
+    else:
+        files = [p for p in path.iterdir() if p.is_file() and p.suffix.lower() in suffixes]
+    return [str(file_path) for file_path in sorted(files)]
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Upload one or more local videos to YouTube as Shorts.")
+    parser.add_argument("--video", help="Single video file to upload.")
+    parser.add_argument("--directory", help="Folder containing videos to upload.")
+    parser.add_argument("--title", help="Title to use for the upload. Defaults to the file name.")
     parser.add_argument("--description", default="Uploaded with yt_automation.")
-    parser.add_argument("--tags", default="shorts,youtube,automation", help="Comma-separated tags.")
-    parser.add_argument("--privacy", default="private", choices=["private", "public", "unlisted"])
+    parser.add_argument("--tags", default=",".join(get_default_tags()))
+    parser.add_argument("--privacy", default=get_default_privacy(), choices=["private", "public", "unlisted"])
+    parser.add_argument("--recursive", action="store_true", help="Include nested files when uploading from a directory.")
+    parser.add_argument("--dry-run", action="store_true", help="List files that would be uploaded without uploading them.")
     return parser.parse_args()
 
 
-if __name__ == "__main__":
-    try:
-        args = parse_args()
+def main() -> None:
+    args = parse_args()
+
+    if bool(args.video) == bool(args.directory):
+        print("Provide either --video or --directory, but not both.", file=sys.stderr)
+        sys.exit(1)
+
+    source = args.video or args.directory
+    video_files = list_video_files(source, recursive=args.recursive)
+
+    if args.dry_run:
+        for file_path in video_files:
+            print(file_path)
+        return
+
+    for file_path in video_files:
+        file_name = Path(file_path).stem
+        title = args.title or file_name
         tags = [tag.strip() for tag in args.tags.split(",") if tag.strip()]
-        upload_short(args.video, args.title, args.description, tags, args.privacy)
-    except FileNotFoundError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        sys.exit(1)
-    except HttpError as exc:
-        print(f"YouTube API error: {exc}", file=sys.stderr)
-        sys.exit(1)
-    except Exception as exc:
-        print(f"Unexpected error: {exc}", file=sys.stderr)
-        sys.exit(1)
+        print(f"Uploading: {file_path}")
+        try:
+            result = upload_video(file_path, title, args.description, tags, args.privacy)
+            print(f"Upload complete for {file_path}. Video ID: {result.get('id')}")
+        except HttpError as exc:
+            print(f"Upload failed for {file_path}: {exc}", file=sys.stderr)
+        except Exception as exc:
+            print(f"Unexpected error for {file_path}: {exc}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
